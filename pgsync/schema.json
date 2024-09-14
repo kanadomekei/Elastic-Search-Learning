@@ -1,0 +1,8 @@
+[
+    {
+        "database": "postgres",
+        "nodes": {
+            "table": "sample"
+        }
+    }
+]

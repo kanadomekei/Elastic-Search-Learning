@@ -1,0 +1,67 @@
+services:
+  pgsync:
+    build:
+      context: ./pgsync
+    environment:
+      PG_HOST: db
+      PG_USER: postgres
+      PG_PASSWORD: hoge
+      ELASTICSEARCH_HOST: elasticsearch
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  db:
+    image: postgres:16.0
+    environment:
+      - POSTGRES_PASSWORD=hoge
+    command: >-
+      -c "config_file=/etc/postgresql/postgresql.conf"
+    volumes:
+      - ./db/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./db/initdb.sh:/docker-entrypoint-initdb.d/initdb.sh
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+
+  pgadmin:
+    image: dpage/pgadmin4:7.7
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=johndoe@example.com
+      - PGADMIN_DEFAULT_PASSWORD=hoge
+    ports:
+      - 5080:80  # 50081から50082に変更
+
+  elasticsearch_prepare:
+    image: bash
+    privileged: true
+    user: root
+    command: ["sysctl", "-w", "vm.max_map_count=262144"]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    depends_on:
+      elasticsearch_prepare:
+        condition: service_completed_successfully
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:9200"]
+      interval: 1s
+      retries: 180
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.2
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "<http://localhost:5601>"]
+    ports:
+      - 55601:5601
